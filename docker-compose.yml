@@ -1,0 +1,15 @@
+version: "3"
+services:
+  riak_kv:
+    image: basho/riak-kv
+    ports:
+      - "8087:8087"
+      - "8098:8098"
+    volumes:
+      - riak-kv-schemas:/etc/riak/schemas
+      - riak-kv-data:/var/lib/riak
+
+volumes:
+  riak-kv-schemas: {}
+  riak-kv-data: {}
+

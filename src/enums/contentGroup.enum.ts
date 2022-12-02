@@ -1,3 +1,3 @@
 export enum ContentGroup {
-  SitePage = 'site_page',
+  SitePage = 'site-page',
 }
