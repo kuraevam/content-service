@@ -3,6 +3,7 @@ import {
   ClassSerializerInterceptor,
   ExecutionContext,
   Injectable,
+  StreamableFile,
 } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { Observable } from 'rxjs';
@@ -17,7 +18,9 @@ export class ResponseSerializerInterceptor extends ClassSerializerInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     return next.handle().pipe(
       map((responseBody: SingularReponseBody | CollectionResponseBody) => {
-        if (responseBody) {
+        if (responseBody instanceof StreamableFile) {
+          return responseBody;
+        } else {
           const { dto, data: plainData, meta, options, errors } = responseBody;
           const data = plainToInstance(dto, plainData);
 
@@ -27,7 +30,6 @@ export class ResponseSerializerInterceptor extends ClassSerializerInterceptor {
             meta,
           };
         }
-
         return {};
       }),
     );

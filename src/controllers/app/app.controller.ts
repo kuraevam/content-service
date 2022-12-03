@@ -1,4 +1,12 @@
-import { Body, Controller, UploadedFile } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  NotFoundException,
+  Param,
+  Query,
+  StreamableFile,
+  UploadedFile,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   Endpoint,
@@ -44,5 +52,32 @@ export class AppController {
         url,
       },
     };
+  }
+
+  @Endpoint(HttpMethod.GET, {
+    path: ':contentType/:contentGroup/:key',
+    apiDoc: {
+      summary: 'Fetch content',
+    },
+  })
+  async showContent(
+    @Param() param: DTO.ShowContentParamRequestDto,
+    @Query() query: DTO.ShowContentQueryRequestDto,
+  ): Promise<StreamableFile> {
+    const content = await this.appService.convertContent(
+      param.contentType,
+      param.contentGroup,
+      param.key,
+      query.width,
+      query.height,
+      query.quality,
+      query.extension,
+    );
+
+    if (!content) {
+      throw new NotFoundException();
+    }
+
+    return new StreamableFile(content);
   }
 }
