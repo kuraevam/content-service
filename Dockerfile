@@ -12,4 +12,4 @@ RUN yarn install --production
 
 EXPOSE 3000
 
-ENTRYPOINT [ "pm2-runtime", "/app/main.js", "-i", "9" ]
+ENTRYPOINT [ "pm2-runtime", "/app/main.js", "-i", "27" ]
