@@ -1,0 +1,42 @@
+stages:
+  - build
+  - staging
+  - production
+
+variables:
+  TAG_COMMIT: $CI_REGISTRY/marketing/content-service:$CI_COMMIT_REF_SLUG
+
+build-image:
+  stage: build
+  tags: [marketing-staging]
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker build --cache-from $TAG_COMMIT -t $TAG_COMMIT .
+    - docker push $TAG_COMMIT
+  only:
+    - main
+
+staging:
+  stage: staging
+  tags: [marketing-staging]
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker pull $TAG_COMMIT
+    - docker container rm -f content-service || true
+    - docker run -d --network=marketing-network --name content-service --env-file $ENV_STAGING $TAG_COMMIT
+    - docker restart nginx
+  only:
+    - main
+
+production:
+  stage: production
+  tags: [marketing-production]
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker pull $TAG_COMMIT
+    - docker container rm -f content-service || true
+    - docker run -d --network=marketing-network --name content-service --env-file $ENV_PRODUCTION $TAG_COMMIT
+    - docker restart nginx
+  when: manual
+  only:
+    - main
