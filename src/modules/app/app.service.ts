@@ -91,12 +91,12 @@ export class AppService {
     mimeType: string;
     hasUpdated: boolean;
   } | null> {
-    const urlOriginImage = this.fetchUrlOriginContent(contentGroup, key);
-    const imageOrigin = await this.fetchContent(urlOriginImage);
+    // const urlOriginImage = this.fetchUrlOriginContent(contentGroup, key);
+    const imageOrigin = null; // await this.fetchContent(urlOriginImage);
 
-    if (!imageOrigin) {
+    /*if (!imageOrigin) {
       return null;
-    }
+    }*/
 
     const urlConvertImage = this.fetchUrlConvertContent(
       contentGroup,
@@ -108,9 +108,9 @@ export class AppService {
     );
     const imageConvert = await this.fetchContent(urlConvertImage);
 
-    let content = imageConvert && imageConvert.data;
-    let hasUpdated = false;
-    if (
+    const content = imageConvert && imageConvert.data;
+    const hasUpdated = false;
+    /*if (
       !imageConvert ||
       (imageConvert?.lastModified &&
         imageOrigin?.lastModified &&
@@ -126,7 +126,7 @@ export class AppService {
         extension,
       );
       hasUpdated = true;
-    }
+    }*/
 
     return {
       data: content,
