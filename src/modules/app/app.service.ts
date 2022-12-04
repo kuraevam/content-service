@@ -20,6 +20,7 @@ export class AppService {
     let url = '';
     if (ContentType.Image === contentType) {
       url = await this.uploadImage(file, contentGroup);
+      await this.insertImageMetadata(file, contentGroup);
     } else {
       throw new Error(`${contentType} in developing`);
     }
@@ -27,13 +28,36 @@ export class AppService {
     return `${siteUrl}/content${url}`;
   }
 
+  private async insertImageMetadata(
+    file: Express.Multer.File,
+    contentGroup: ContentGroup,
+  ): Promise<void> {
+    const urlOriginImage = this.fetchUrlOriginContent(
+      contentGroup,
+      file.originalname,
+    );
+    const imageOrigin = await this.fetchContent(urlOriginImage);
+
+    const urlMetadataOriginImage = this.fetchUrlMetadataOriginContent(
+      contentGroup,
+      file.originalname,
+    );
+
+    const data = {
+      lastModified: imageOrigin?.lastModified,
+    };
+    await axios.post(urlMetadataOriginImage, data, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+  }
+
   private async uploadImage(
     file: Express.Multer.File,
     contentGroup: ContentGroup,
   ): Promise<string> {
-    const fileName = file.originalname.toLowerCase();
-
-    const url = this.fetchUrlOriginContent(contentGroup, fileName);
+    const url = this.fetchUrlOriginContent(contentGroup, file.originalname);
 
     const image = await sharp(file.buffer).toBuffer();
     await axios.post(url, image, {
@@ -42,7 +66,7 @@ export class AppService {
       },
     });
 
-    return `/${ContentType.Image}/${contentGroup}/${fileName}`;
+    return `/${ContentType.Image}/${contentGroup}/${file.originalname}`;
   }
 
   async convertContent(
@@ -91,10 +115,14 @@ export class AppService {
     mimeType: string;
     hasUpdated: boolean;
   } | null> {
-    const urlOriginImage = this.fetchUrlOriginContent(contentGroup, key);
-    const imageOrigin = await this.fetchContent(urlOriginImage);
-
-    if (!imageOrigin) {
+    const urlMetadataOriginImage = this.fetchUrlMetadataOriginContent(
+      contentGroup,
+      key,
+    );
+    const imageMetadataOrigin = await this.fetchImageMetadataOrigin(
+      urlMetadataOriginImage,
+    );
+    if (!imageMetadataOrigin) {
       return null;
     }
 
@@ -113,10 +141,14 @@ export class AppService {
     if (
       !imageConvert ||
       (imageConvert?.lastModified &&
-        imageOrigin?.lastModified &&
-        imageConvert?.lastModified < imageOrigin?.lastModified)
+        imageConvert?.lastModified < imageMetadataOrigin.lastModified)
     ) {
-      console.log('CONVERT: YES', urlConvertImage);
+      const urlOriginImage = this.fetchUrlOriginContent(contentGroup, key);
+      const imageOrigin = await this.fetchContent(urlOriginImage);
+
+      if (!imageOrigin) {
+        return null;
+      }
 
       content = await this.convertImage(
         imageOrigin.data,
@@ -168,12 +200,40 @@ export class AppService {
     return newImage;
   }
 
+  private async fetchImageMetadataOrigin(url: string): Promise<{
+    lastModified: Date;
+  } | null> {
+    const imageMetadataOrigin = await axios
+      .get(url, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      .then((res) => {
+        return {
+          lastModified: new Date(res.data.lastModified),
+        };
+      })
+      .catch(() => null);
+
+    return imageMetadataOrigin;
+  }
+
   private fetchUrlOriginContent(
     contentGroup: ContentGroup,
     key: string,
   ): string {
     const riakUrl = this.configService.getOrThrow<string>('riakUrl');
-    return `${riakUrl}/${ContentType.Image},${contentGroup}/${key}`;
+    return `${riakUrl}/${
+      ContentType.Image
+    },${contentGroup}/${key.toLowerCase()}`;
+  }
+
+  private fetchUrlMetadataOriginContent(
+    contentGroup: ContentGroup,
+    key: string,
+  ): string {
+    return this.fetchUrlOriginContent(contentGroup, key) + ',metadata';
   }
 
   private fetchUrlConvertContent(
