@@ -28,6 +28,12 @@ staging:
     - docker run -d --network=marketing-network --name content-service_2 --env-file $ENV_STAGING $TAG_COMMIT
     - docker container rm -f content-service_3 || true
     - docker run -d --network=marketing-network --name content-service_3 --env-file $ENV_STAGING $TAG_COMMIT
+    - docker container rm -f content-service_4 || true
+    - docker run -d --network=marketing-network --name content-service_4 --env-file $ENV_STAGING $TAG_COMMIT
+    - docker container rm -f content-service_5 || true
+    - docker run -d --network=marketing-network --name content-service_5 --env-file $ENV_STAGING $TAG_COMMIT
+    - docker container rm -f content-service_6 || true
+    - docker run -d --network=marketing-network --name content-service_6 --env-file $ENV_STAGING $TAG_COMMIT
     - docker restart nginx
   only:
     - main
