@@ -11,7 +11,7 @@ build-image:
   tags: [marketing-staging]
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker build --cache-from $TAG_COMMIT -t $TAG_COMMIT .
+    - docker build -t $TAG_COMMIT .
     - docker push $TAG_COMMIT
   only:
     - main
@@ -22,14 +22,9 @@ staging:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_JOB_TOKEN $CI_REGISTRY
     - docker pull $TAG_COMMIT
-    - docker container rm -f content-service || true
+    - docker container stop content-service
+    - docker container rm content-service
     - docker run -d --network=marketing-network --name content-service --env-file $ENV_STAGING $TAG_COMMIT
-    - docker container rm -f content-service_1 || true
-    - docker run -d --network=marketing-network --name content-service_1 --env-file $ENV_STAGING $TAG_COMMIT
-    - docker container rm -f content-service_2 || true
-    - docker run -d --network=marketing-network --name content-service_2 --env-file $ENV_STAGING $TAG_COMMIT
-    - docker container rm -f content-service_3 || true
-    - docker run -d --network=marketing-network --name content-service_3 --env-file $ENV_STAGING $TAG_COMMIT
     - docker restart nginx
   only:
     - main
@@ -40,14 +35,9 @@ production:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_JOB_TOKEN $CI_REGISTRY
     - docker pull $TAG_COMMIT
-    - docker container rm -f content-service || true
+    - docker container stop content-service
+    - docker container rm content-service
     - docker run -d --network=marketing-network --name content-service --env-file $ENV_STAGING $TAG_COMMIT
-    - docker container rm -f content-service_1 || true
-    - docker run -d --network=marketing-network --name content-service_1 --env-file $ENV_STAGING $TAG_COMMIT
-    - docker container rm -f content-service_2 || true
-    - docker run -d --network=marketing-network --name content-service_2 --env-file $ENV_STAGING $TAG_COMMIT
-    - docker container rm -f content-service_3 || true
-    - docker run -d --network=marketing-network --name content-service_3 --env-file $ENV_STAGING $TAG_COMMIT
     - docker restart nginx
   when: manual
   only:
