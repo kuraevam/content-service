@@ -1,30 +1,14 @@
 stages:
-  - build
   - staging
   - production
-
-variables:
-  TAG_COMMIT: $CI_REGISTRY/marketing/content-service:$CI_COMMIT_REF_SLUG
-
-build-image:
-  stage: build
-  tags: [marketing-staging]
-  script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker build -t $TAG_COMMIT .
-    - docker push $TAG_COMMIT
-  only:
-    - main
 
 staging:
   stage: staging
   tags: [marketing-staging]
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker pull $TAG_COMMIT
-    - docker container stop content-service
-    - docker container rm content-service
-    - docker run -d --network=marketing-network --name content-service --env-file $ENV_STAGING $TAG_COMMIT
+    - cat $ENV_STAGING > .env
+    - docker compose down || true
+    - docker compose up -d --build
     - docker restart nginx
   only:
     - main

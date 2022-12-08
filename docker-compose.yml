@@ -1,15 +1,36 @@
 version: "3"
 services:
-  riak_kv:
-    image: basho/riak-kv
+  nginx:
+    image: nginx
+    container_name: 'content-service-nginx'
     ports:
-      - "8087:8087"
-      - "8098:8098"
+      - '8080:80'
     volumes:
-      - riak-kv-schemas:/etc/riak/schemas
-      - riak-kv-data:/var/lib/riak
+      - ./deploy/nginx:/etc/nginx/conf.d/
+      - content-service-storage:/var/content-service-storage/
+    networks: 
+      - marketing-network
+      - content-service-network
+  content-service:
+    env_file: .env
+    build: .
+    volumes:
+      - content-service-storage:/app/content-service-storage/
+    networks: 
+      - content-service-network
+    deploy:
+      replicas: 3
 
-volumes:
-  riak-kv-schemas: {}
-  riak-kv-data: {}
+networks:
+  #marketing-network:
+  #  name: marketing-network
+  content-service-network:
+    name: content-service-network
+
+volumes: 
+  content-service-storage: {}
+
+
+
+
 

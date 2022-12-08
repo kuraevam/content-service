@@ -2,10 +2,10 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ContentGroup } from 'src/enums/contentGroup.enum';
 import { ContentType } from 'src/enums/contentType.enum';
-import axios, { AxiosResponse } from 'axios';
 import sharp from 'sharp';
 import { ContentFormat } from 'src/enums/contentFormat.enum';
 import { ErrorMsg } from 'src/enums/errorMsg.enum';
+import fs from 'fs';
 
 @Injectable()
 export class AppService {
@@ -20,7 +20,6 @@ export class AppService {
     let url = '';
     if (ContentType.Image === contentType) {
       url = await this.uploadImage(file, contentGroup);
-      await this.insertImageMetadata(file, contentGroup);
     } else {
       throw new Error(`${contentType} in developing`);
     }
@@ -28,73 +27,35 @@ export class AppService {
     return `${siteUrl}/content${url}`;
   }
 
-  private async insertImageMetadata(
-    file: Express.Multer.File,
-    contentGroup: ContentGroup,
-  ): Promise<void> {
-    const urlOriginImage = this.fetchUrlOriginContent(
-      contentGroup,
-      file.originalname,
-    );
-    const imageOrigin = await this.fetchContent(urlOriginImage);
-
-    const urlMetadataOriginImage = this.fetchUrlMetadataOriginContent(
-      contentGroup,
-      file.originalname,
-    );
-
-    const data = {
-      lastModified: imageOrigin?.lastModified,
-    };
-    await axios.post(urlMetadataOriginImage, data, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-  }
-
   private async uploadImage(
     file: Express.Multer.File,
     contentGroup: ContentGroup,
   ): Promise<string> {
-    const url = this.fetchUrlOriginContent(contentGroup, file.originalname);
+    const fileName = await this.fetchFileName(file.buffer);
 
-    const image = await sharp(file.buffer).toBuffer();
-    await axios.post(url, image, {
-      headers: {
-        'Content-Type': file.mimetype,
-      },
-    });
+    const pathOriginContent = this.fetchPathOriginContent(
+      contentGroup,
+      fileName,
+    );
 
-    return `/${ContentType.Image}/${contentGroup}/${file.originalname}`;
+    const image = sharp(file.buffer);
+    const imageMetadata = await image.metadata();
+
+    const imageStream = fs.createWriteStream(pathOriginContent);
+    image.pipe(imageStream);
+
+    return `/${ContentType.Image}/${contentGroup}/w:${imageMetadata.width}_h:${imageMetadata.height}/${fileName}`;
   }
 
   async convertContent(
     contentType: ContentType,
     contentGroup: ContentGroup,
     key: string,
-    width?: number,
-    height?: number,
-    quality?: number,
-    extension?: string,
+    options: string,
   ): Promise<Buffer | null> {
     let content = null;
     if (ContentType.Image === contentType) {
-      content = await this.fetchConvertImage(
-        contentGroup,
-        key,
-        width,
-        height,
-        quality,
-        extension,
-      );
-      if (content && content.data && content.hasUpdated) {
-        await axios.post(content.url, content.data, {
-          headers: {
-            'Content-Type': content.mimeType,
-          },
-        });
-      }
+      content = await this.fetchConvertImage(contentGroup, key, options);
     } else {
       throw new Error(`${contentType} in developing`);
     }
@@ -102,69 +63,88 @@ export class AppService {
     return content && content.data;
   }
 
+  private parseOptions(data: string): {
+    width: number | undefined;
+    height: number | undefined;
+    quality: number | undefined;
+    extension: string | undefined;
+  } {
+    const options: {
+      width: number | undefined;
+      height: number | undefined;
+      quality: number | undefined;
+      extension: string | undefined;
+    } = {
+      width: undefined,
+      height: undefined,
+      quality: undefined,
+      extension: undefined,
+    };
+
+    const params = data.split('_');
+
+    for (const param of params) {
+      let [key, value] = param.split(':');
+
+      if (key && value) {
+        key = key.toLowerCase();
+        value = value.toLowerCase();
+        if (key === 'w') {
+          const num = Number(value);
+          options.width = isNaN(num) ? undefined : num;
+        }
+        if (key === 'h') {
+          const num = Number(value);
+          options.height = isNaN(num) ? undefined : num;
+        }
+        if (key === 'q') {
+          const num = Number(value);
+          options.quality = isNaN(num) ? undefined : num;
+        }
+        if (key === 'ext') {
+          options.extension = value;
+        }
+      }
+    }
+    return options;
+  }
+
   private async fetchConvertImage(
     contentGroup: ContentGroup,
     key: string,
-    width?: number,
-    height?: number,
-    quality?: number,
-    extension?: string,
+    options: string,
   ): Promise<{
     data: Buffer | null;
-    url: string;
-    mimeType: string;
-    hasUpdated: boolean;
   } | null> {
-    const urlMetadataOriginImage = this.fetchUrlMetadataOriginContent(
-      contentGroup,
-      key,
-    );
-    const imageMetadataOrigin = await this.fetchImageMetadataOrigin(
-      urlMetadataOriginImage,
-    );
-    if (!imageMetadataOrigin) {
+    const pathOriginImage = this.fetchPathOriginContent(contentGroup, key);
+
+    const image = fs.readFileSync(pathOriginImage);
+
+    if (!image) {
       return null;
     }
 
-    const urlConvertImage = this.fetchUrlConvertContent(
-      contentGroup,
-      key,
+    const { width, height, quality, extension } = this.parseOptions(options);
+
+    const newImage = await this.convertImage(
+      image,
       width,
       height,
       quality,
       extension,
     );
-    const imageConvert = await this.fetchContent(urlConvertImage);
 
-    let content = imageConvert && imageConvert.data;
-    let hasUpdated = false;
-    if (
-      !imageConvert ||
-      (imageConvert?.lastModified &&
-        imageConvert?.lastModified < imageMetadataOrigin.lastModified)
-    ) {
-      const urlOriginImage = this.fetchUrlOriginContent(contentGroup, key);
-      const imageOrigin = await this.fetchContent(urlOriginImage);
+    const pathConvertContent = this.fetchPathConvertContent(
+      contentGroup,
+      key,
+      options,
+    );
 
-      if (!imageOrigin) {
-        return null;
-      }
-
-      content = await this.convertImage(
-        imageOrigin.data,
-        width,
-        height,
-        quality,
-        extension,
-      );
-      hasUpdated = true;
-    }
+    const imageStream = fs.createWriteStream(pathConvertContent);
+    sharp(newImage).pipe(imageStream);
 
     return {
-      data: content,
-      url: urlConvertImage,
-      mimeType: `image/${extension}`,
-      hasUpdated,
+      data: newImage,
     };
   }
 
@@ -200,75 +180,37 @@ export class AppService {
     return newImage;
   }
 
-  private async fetchImageMetadataOrigin(url: string): Promise<{
-    lastModified: Date;
-  } | null> {
-    const imageMetadataOrigin = await axios
-      .get(url, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      .then((res) => {
-        return {
-          lastModified: new Date(res.data.lastModified),
-        };
-      })
-      .catch(() => null);
+  private async fetchFileName(data: Buffer): Promise<string> {
+    const { createHash } = await import('crypto');
+    const l = createHash('sha256').update(data).digest('hex').toLowerCase();
+    const uuid = `${l.slice(0, 8)}-${l.slice(8, 12)}-${l.slice(
+      12,
+      16,
+    )}-${l.slice(16, 20)}-${l.slice(20, 32)}`;
 
-    return imageMetadataOrigin;
+    return uuid;
   }
 
-  private fetchUrlOriginContent(
+  private fetchPathOriginContent(
     contentGroup: ContentGroup,
     key: string,
   ): string {
-    const riakUrl = this.configService.getOrThrow<string>('riakUrl');
-    return `${riakUrl}/${
-      ContentType.Image
-    },${contentGroup}/${key.toLowerCase()}`;
+    const storageFolger =
+      this.configService.getOrThrow<string>('storageFolder');
+    const dir = `${storageFolger}/origin/content/${ContentType.Image}/${contentGroup}`;
+    fs.mkdirSync(dir, { recursive: true });
+    return `${dir}/${key}`;
   }
 
-  private fetchUrlMetadataOriginContent(
+  private fetchPathConvertContent(
     contentGroup: ContentGroup,
     key: string,
+    options: string,
   ): string {
-    return this.fetchUrlOriginContent(contentGroup, key) + ',metadata';
-  }
-
-  private fetchUrlConvertContent(
-    contentGroup: ContentGroup,
-    key: string,
-    width?: number,
-    height?: number,
-    quality?: number,
-    extension?: string,
-  ): string {
-    const urlOriginContent = this.fetchUrlOriginContent(contentGroup, key);
-    return `${urlOriginContent},w=${width ?? ''},h=${height ?? ''},q=${
-      quality ?? ''
-    },ext=${extension ?? ''}`;
-  }
-
-  private async fetchContent(url: string): Promise<{
-    data: Buffer;
-    lastModified: Date | null;
-  } | null> {
-    const content: AxiosResponse<Buffer> | null = await axios
-      .get(url, {
-        responseType: 'arraybuffer',
-      })
-      .catch(() => {
-        return null;
-      });
-
-    if (content) {
-      const lastModifiedStr = content.headers['last-modified'];
-      return {
-        data: content.data,
-        lastModified: lastModifiedStr ? new Date(lastModifiedStr) : null,
-      };
-    }
-    return null;
+    const storageFolger =
+      this.configService.getOrThrow<string>('storageFolder');
+    const dir = `${storageFolger}/convert/content/${ContentType.Image}/${contentGroup}/${options}`;
+    fs.mkdirSync(dir, { recursive: true });
+    return `${dir}/${key}`;
   }
 }
