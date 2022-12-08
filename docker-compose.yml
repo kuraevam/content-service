@@ -3,8 +3,6 @@ services:
   nginx:
     image: nginx
     container_name: 'content-service-nginx'
-    ports:
-      - '8080:80'
     volumes:
       - ./deploy/nginx:/etc/nginx/conf.d/
       - content-service-storage:/var/content-service-storage/
