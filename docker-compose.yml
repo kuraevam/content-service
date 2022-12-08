@@ -1,10 +1,9 @@
 version: "3"
 services:
   nginx:
-    image: nginx
+    build: ./deploy/nginx
     container_name: 'content-service-nginx'
     volumes:
-      - ./deploy/nginx:/etc/nginx/conf.d/
       - content-service-storage:/var/content-service-storage/
     networks: 
       - marketing-network
