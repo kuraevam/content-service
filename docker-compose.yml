@@ -22,8 +22,8 @@ services:
       replicas: 3
 
 networks:
-  #marketing-network:
-  #  name: marketing-network
+  marketing-network:
+    name: marketing-network
   content-service-network:
     name: content-service-network
 
